@@ -1,0 +1,15 @@
+#!/bin/sh
+# BerkiOS live-build configuration.
+# Run by `lb config` from the repository root.
+set -e
+
+lb config noauto \
+    --distribution trixie \
+    --architectures amd64 \
+    --binary-images iso-hybrid \
+    --debian-installer none \
+    --apt-indices false \
+    --archive-areas "main contrib non-free non-free-firmware" \
+    --iso-volume "BerkiOS" \
+    --iso-application "BerkiOS 1.0" \
+    --iso-publisher "BerkiOS"
