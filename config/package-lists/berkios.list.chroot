@@ -1,0 +1,40 @@
+# BerkiOS package list — Debian 13 "trixie", XFCE desktop, macOS look.
+# One package per line. Kept lean on purpose: the live ISO stays
+# small and the build stays fast.
+
+# Desktop
+xfce4
+xfce4-terminal
+thunar
+plank
+
+# Apps
+firefox-esr
+libreoffice-writer
+libreoffice-calc
+libreoffice-impress
+vlc
+
+# Network (network-manager-gnome provides the nm-applet tray icon)
+network-manager
+network-manager-gnome
+
+# Theme build tools (WhiteSur needs sassc + glib-compile-resources;
+# gtk-update-icon-cache comes from libgtk-3-bin)
+git
+sassc
+libglib2.0-dev-bin
+libgtk-3-bin
+gtk2-engines-murrine
+gtk2-engines-pixbuf
+optipng
+inkscape
+
+# Installer (Debian installer itself is disabled; Calamares does the install)
+calamares
+calamares-settings-debian
+
+# Live system essentials (live-build pulls most of these anyway)
+live-boot
+live-config
+live-config-systemd
