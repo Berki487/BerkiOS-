@@ -1,0 +1,165 @@
+#!/bin/sh
+# BerkiOS theme hook — runs as root inside the chroot during `lb build`.
+# Installs the WhiteSur macOS look (MIT, by vinceliuice), writes XFCE
+# defaults for new users, starts the Plank dock, and brands the system.
+set -e
+
+echo "BerkiOS: installing WhiteSur theme, icons and cursors..."
+
+# --- WhiteSur themes -------------------------------------------------------
+cd /tmp
+rm -rf WhiteSur-gtk-theme WhiteSur-icon-theme McMojave-cursors
+
+# One retry each: a transient network blip must not kill a 30-minute build.
+git clone --depth 1 https://github.com/vinceliuice/WhiteSur-gtk-theme.git || git clone --depth 1 https://github.com/vinceliuice/WhiteSur-gtk-theme.git
+git clone --depth 1 https://github.com/vinceliuice/WhiteSur-icon-theme.git || git clone --depth 1 https://github.com/vinceliuice/WhiteSur-icon-theme.git
+git clone --depth 1 https://github.com/vinceliuice/McMojave-cursors.git || git clone --depth 1 https://github.com/vinceliuice/McMojave-cursors.git
+
+# GTK theme (light + dark) to /usr/share/themes.
+# -d and --silent-mode are real options of WhiteSur's install.sh
+# (silent mode so the automated build never waits on a prompt).
+( cd /tmp/WhiteSur-gtk-theme && ./install.sh --silent-mode -d /usr/share/themes )
+
+# Icon theme to /usr/share/icons (-d is a real option here too).
+( cd /tmp/WhiteSur-icon-theme && ./install.sh -d /usr/share/icons )
+
+# Cursors: install.sh has NO -d option; as root it installs to
+# /usr/share/icons/McMojave-cursors (that is the theme name to use).
+( cd /tmp/McMojave-cursors && ./install.sh )
+
+# The theme names XFCE will be told to use must exist, or fail loudly here.
+test -d /usr/share/themes/WhiteSur-Dark || { echo "ERROR: WhiteSur-Dark theme missing!" >&2; exit 1; }
+test -d /usr/share/icons/WhiteSur || { echo "ERROR: WhiteSur icons missing!" >&2; exit 1; }
+test -d /usr/share/icons/McMojave-cursors || { echo "ERROR: McMojave-cursors missing!" >&2; exit 1; }
+
+# Wallpaper comes from config/includes.chroot (copied into the chroot by
+# live-build). Warn only if it is missing: a missing wallpaper is cosmetic,
+# it must not kill the whole build.
+if [ ! -f /usr/share/backgrounds/berkios.png ]; then
+    echo "WARNING: /usr/share/backgrounds/berkios.png missing, desktop will use the XFCE default." >&2
+fi
+
+rm -rf /tmp/WhiteSur-gtk-theme /tmp/WhiteSur-icon-theme /tmp/McMojave-cursors
+
+# --- XFCE defaults for every new user --------------------------------------
+SKEL_XFCONF=/etc/skel/.config/xfce4/xfconf/xfce-perchannel-xml
+mkdir -p "$SKEL_XFCONF"
+
+# GTK theme + icons + cursors + font.
+cat > "$SKEL_XFCONF/xsettings.xml" <<'EOF'
+<?xml version="1.0" encoding="UTF-8"?>
+<channel name="xsettings" version="1.0">
+  <property name="Net" type="empty">
+    <property name="ThemeName" type="string" value="WhiteSur-Dark"/>
+    <property name="IconThemeName" type="string" value="WhiteSur"/>
+  </property>
+  <property name="Gtk" type="empty">
+    <property name="CursorThemeName" type="string" value="McMojave-cursors"/>
+    <property name="CursorThemeSize" type="int" value="24"/>
+    <property name="FontName" type="string" value="Sans 10"/>
+  </property>
+  <property name="Xft" type="empty">
+    <property name="Antialias" type="int" value="1"/>
+    <property name="Hinting" type="int" value="1"/>
+    <property name="RGBA" type="string" value="rgb"/>
+  </property>
+</channel>
+EOF
+
+# Window manager: WhiteSur-Dark, macOS-style buttons on the left
+# (C = close, H = minimize, M = maximize, left to right).
+cat > "$SKEL_XFCONF/xfwm4.xml" <<'EOF'
+<?xml version="1.0" encoding="UTF-8"?>
+<channel name="xfwm4" version="1.0">
+  <property name="general" type="empty">
+    <property name="theme" type="string" value="WhiteSur-Dark"/>
+    <property name="button_layout" type="string" value="CHM|"/>
+    <property name="title_font" type="string" value="Sans Bold 10"/>
+  </property>
+</channel>
+EOF
+
+# Single top panel (p=8 is the top position): app menu, window list,
+# expanding separator, system tray, clock.
+cat > "$SKEL_XFCONF/xfce4-panel.xml" <<'EOF'
+<?xml version="1.0" encoding="UTF-8"?>
+<channel name="xfce4-panel" version="1.0">
+  <property name="configver" type="int" value="2"/>
+  <property name="panels" type="array">
+    <value type="int" value="1"/>
+    <property name="panel-1" type="empty">
+      <property name="position" type="string" value="p=8;x=0;y=0"/>
+      <property name="length" type="uint" value="100"/>
+      <property name="position-locked" type="bool" value="true"/>
+      <property name="size" type="uint" value="28"/>
+      <property name="plugin-ids" type="array">
+        <value type="int" value="1"/>
+        <value type="int" value="2"/>
+        <value type="int" value="3"/>
+        <value type="int" value="4"/>
+        <value type="int" value="5"/>
+      </property>
+    </property>
+  </property>
+  <property name="plugins" type="empty">
+    <property name="plugin-1" type="string" value="applicationsmenu">
+      <property name="show-button-title" type="bool" value="true"/>
+      <property name="button-title" type="string" value="berkiOS"/>
+    </property>
+    <property name="plugin-2" type="string" value="tasklist"/>
+    <property name="plugin-3" type="string" value="separator">
+      <property name="expand" type="bool" value="true"/>
+      <property name="style" type="uint" value="0"/>
+    </property>
+    <property name="plugin-4" type="string" value="systray"/>
+    <property name="plugin-5" type="string" value="clock"/>
+  </property>
+</channel>
+EOF
+
+# Desktop wallpaper (image-style 5 = zoomed to fill).
+cat > "$SKEL_XFCONF/xfce4-desktop.xml" <<'EOF'
+<?xml version="1.0" encoding="UTF-8"?>
+<channel name="xfce4-desktop" version="1.0">
+  <property name="backdrop" type="empty">
+    <property name="screen0" type="empty">
+      <property name="monitor0" type="empty">
+        <property name="workspace0" type="empty">
+          <property name="image-path" type="string" value="/usr/share/backgrounds/berkios.png"/>
+          <property name="image-style" type="int" value="5"/>
+        </property>
+      </property>
+    </property>
+  </property>
+</channel>
+EOF
+
+# --- Plank dock at login ----------------------------------------------------
+mkdir -p /etc/skel/.config/autostart
+cat > /etc/skel/.config/autostart/plank.desktop <<'EOF'
+[Desktop Entry]
+Type=Application
+Name=Plank
+Comment=macOS-style dock
+Exec=plank
+Icon=plank
+Terminal=false
+Categories=Utility;
+X-GNOME-Autostart-enabled=true
+EOF
+
+# --- Branding ---------------------------------------------------------------
+cat > /etc/os-release <<'EOF'
+NAME="BerkiOS"
+PRETTY_NAME="BerkiOS 1.0"
+ID=berkios
+ID_LIKE=debian
+VERSION_ID="1.0"
+VERSION="1.0"
+EOF
+
+cat > /etc/issue <<'EOF'
+BerkiOS 1.0 (based on Debian 13 "trixie")
+EOF
+
+echo "BerkiOS theme hook done."
