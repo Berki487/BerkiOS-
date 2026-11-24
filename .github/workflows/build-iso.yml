@@ -35,7 +35,16 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install -y live-build debootstrap debian-archive-keyring \
-            xorriso squashfs-tools syslinux-common isolinux
+            xorriso squashfs-tools syslinux-common isolinux python3-pil
+
+      # GitHub push does not preserve the executable bit, so restore it
+      # here; and generate the wallpaper (Pillow) into includes.chroot
+      # before live-build copies it into the ISO.
+      - name: Prepare BerkiOS files
+        run: |
+          chmod +x auto/config config/hooks/live/0090-berkios-theme.chroot
+          python3 scripts/make-wallpaper.py
+          ls -lh config/includes.chroot/usr/share/backgrounds/berkios.png
 
       # lb config reads auto/config; lb build produces
       # live-image-amd64.hybrid.iso in the repo root.
